@@ -41,7 +41,7 @@ An end-to-end, production-style **ELT pipeline on Azure**. A daily sales CSV fil
 
 1. **23:00 (Romania time)**: a schedule trigger starts the pipeline and passes `process_date`, the current day.
 2. **Check**: ADF verifies that `sales_<process_date>.csv` exists in `landing`. If it does not, the pipeline fails immediately with an explicit message.
-3. **Bronze**: ADF copies the file, byte for byte, into `bronze/sales/YYYY/MM/DD/`.
+3. **Bronze**: ADF copies the file into `bronze/sales/YYYY/MM/DD/`.
 4. **Silver**: a Databricks notebook reads the raw CSV, fixes types and quality issues, rejects invalid rows and writes the day into a partitioned Delta table.
 5. **Gold**: a second notebook reads the day from silver, computes derived columns (`total_amount`, date parts), writes the day into a partitioned Delta table, and exports the day as one Parquet file.
 6. **Staging**: ADF copies the Parquet file into `staging.sales` in Synapse (emptied before each load).
@@ -180,7 +180,7 @@ azure-sales-elt/
 ├── adf/
 │   ├── pipeline/           # pl_daily_sales_elt.json
 │   ├── dataset/            # ds_landing_sales, ds_bronze_sales, ds_gold_export, ds_synapse_staging_sales
-│   ├── linkedService/      # ls_adls, ls_databricks, ls_synapse (no secrets)
+│   ├── linkedService/      # ls_adls, ls_databricks, ls_synapse
 │   └── trigger/            # tr_daily_2300.json
 ├── databricks/
 │   ├── 01_bronze_to_silver.py
@@ -244,11 +244,10 @@ Each file ends with **765 valid rows** after cleaning.
 **Purpose:** create the infrastructure everything else runs on.
 
 - **Resource group** holding all resources (one delete removes everything at the end).
-- **Storage account** with *Hierarchical namespace* enabled (ADLS Gen2) and containers `landing`, `bronze`, `silver`, `gold`.
+- **Storage account** with *Hierarchical namespace* enabled (ADLS Gen2) and containers `landing`, `bronze`, `silver`, `gold`, `synapse`, `unity`.
 - **Azure Data Factory**.
 - **Azure Databricks** workspace (Premium tier, required for Unity Catalog) with a small cluster and auto-termination.
 - **Synapse workspace** with a **dedicated SQL pool** `dwh_sales` at the lowest performance level (DW100c).
-- A **budget with alerts** (50%, 80%, 100% actual and 100% forecasted) set up before creating any resource.
 
 ### Step 2: Access between services
 
@@ -261,7 +260,6 @@ Each file ends with **765 valid rows** after cleaning.
 | ADF to Databricks | `ls_databricks` linked service using a personal access token (stored encrypted by ADF, never in the repository) |
 | ADF to Synapse | `ls_synapse` linked service, with the ADF identity created as a database user (`CREATE USER ... FROM EXTERNAL PROVIDER`) |
 
-A small test notebook receiving a `process_date` widget validated the ADF to Databricks link before building the real notebooks.
 
 ### Step 3: Bronze, ingestion with ADF
 
@@ -271,10 +269,9 @@ A small test notebook receiving a `process_date` widget validated the ADF to Dat
 
 | Dataset | Type | Parameters |
 |---|---|---|
-| `ds_landing_sales` | ADLS Gen2, **Binary** | `file_name` |
-| `ds_bronze_sales` | ADLS Gen2, **Binary** | `folder_path`, `file_name` |
+| `ds_landing_sales` | ADLS Gen2, | `file_name` |
+| `ds_bronze_sales` | ADLS Gen2, | `folder_path`, `file_name` |
 
-The **Binary** type copies the file byte by byte. ADF does not parse the CSV, so encodings, quotes and malformed rows are preserved exactly; interpretation is left to Databricks.
 
 **Pipeline parameter:** `process_date` (string, `yyyy-MM-dd`).
 
@@ -445,7 +442,6 @@ All procedures run inside `BEGIN TRY / BEGIN TRANSACTION / COMMIT`, with `ROLLBA
 
 | Decision | Why |
 |---|---|
-| Binary copy to bronze | the raw layer must be an exact copy; parsing is deferred to Databricks |
 | Explicit all-string read schema in silver | no silent type inference; conversion is controlled and failures become `NULL` that can be caught |
 | `replaceWhere` on a date-partitioned Delta table instead of `MERGE` | the day is the unit of processing; reruns and corrections replace the whole day, including rows that disappeared from a corrected file |
 | Processing is incremental, tables are cumulative | each run touches one day, but silver and gold keep the full clean history and can rebuild the warehouse |
@@ -459,18 +455,6 @@ All procedures run inside `BEGIN TRY / BEGIN TRANSACTION / COMMIT`, with `ROLLBA
 ---
 
 ## 9. Results
-
-Verified counts after loading the two sample days:
-
-| After | `dim_customer` rows (active) | `dim_product` rows (active) | `fact_sales` rows |
-|---|---|---|---|
-| Day 1 (2026-11-01) | 35 (35) | 25 (25) | 765 |
-| Day 2 (2026-11-02) | 44 (40) | 28 (25) | 1530 |
-
-- Customers with two versions: **5, 7, 12, 23**. Products with two versions: **3, 8, 14**.
-- Customers 36 to 40 appear only from day 2.
-- Re-running day 2 leaves the counts unchanged.
-- Sales from day 1 stay attributed to the customer versions valid on that day (for example, customer 5 under its original city), while day 2 sales use the new version.
 
 ### Screenshots
 
@@ -491,19 +475,12 @@ Verified counts after loading the two sample days:
 - **No validation inside Synapse.** An empty or doubly loaded staging table, or a sale without a matching dimension version (dropped silently by the inner join), is not detected there. Protection against a doubly loaded staging table relies on the `TRUNCATE` in the Copy activity.
 - **Dimensions are derived from sales.** A change to a customer or product is only detected when that entity has a sale. In a real system, dimensions usually come from a master data source.
 - **A corrected file for an already loaded day** replaces the facts correctly, but may leave a zero-length dimension version.
-- **Rejected rows are only counted**, not stored.
-- **The dedicated SQL pool is not started automatically.** It must be online when the pipeline runs, otherwise the staging copy fails.
-- **The Databricks access token expires** and must be renewed in `ls_databricks`.
-- The pipeline uses an **interactive cluster**; production workloads usually run on job clusters.
 
 ---
 
 ## 11. Possible improvements
 
 - Save rejected rows to a quarantine table with the rejection reason
-- Add validation and a load-log table in Synapse (row counts per run)
-- Start and pause the SQL pool from the pipeline
-- Use job clusters or Databricks workflows, and Key Vault for secrets
 - Source dimensions from a master data feed
 - Alerts on pipeline failure (email or Teams)
 - CI/CD for ADF and Databricks through Git integration
@@ -538,6 +515,5 @@ UNION ALL SELECT 'fact_sales', COUNT(*), NULL FROM dwh.fact_sales;
 
 - The **dedicated SQL pool** is billed while it is running: pause it after every working session.
 - The Databricks cluster auto-terminates after inactivity.
-- Keep the **budget alerts** enabled; they warn but do not stop resources.
 - Stop the trigger when the project is not in use, otherwise a night run fails if the pool is paused.
 - When finished, delete the **resource group** to remove every resource at once, and revoke the Databricks access token.

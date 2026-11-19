@@ -14,10 +14,10 @@ An end-to-end, production-style **ELT pipeline on Azure**. A daily sales CSV fil
 6. [Source data](#6-source-data)
 7. [Implementation, step by step](#7-implementation-step-by-step)
 8. [Design decisions](#8-design-decisions)
-9. [Known limitations](#10-known-limitations)
-10. [Possible improvements](#11-possible-improvements)
-11. [How to reproduce](#12-how-to-reproduce)
-12. [Cost control and cleanup](#13-cost-control-and-cleanup)
+9. [Known limitations](#9-known-limitations)
+10. [Possible improvements](#10-possible-improvements)
+11. [How to reproduce](#11-how-to-reproduce)
+12. [Cost control and cleanup](#12-cost-control-and-cleanup)
 
 ---
 

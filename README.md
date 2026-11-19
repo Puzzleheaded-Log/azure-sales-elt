@@ -14,11 +14,10 @@ An end-to-end, production-style **ELT pipeline on Azure**. A daily sales CSV fil
 6. [Source data](#6-source-data)
 7. [Implementation, step by step](#7-implementation-step-by-step)
 8. [Design decisions](#8-design-decisions)
-9. [Results](#9-results)
-10. [Known limitations](#10-known-limitations)
-11. [Possible improvements](#11-possible-improvements)
-12. [How to reproduce](#12-how-to-reproduce)
-13. [Cost control and cleanup](#13-cost-control-and-cleanup)
+9. [Known limitations](#10-known-limitations)
+10. [Possible improvements](#11-possible-improvements)
+11. [How to reproduce](#12-how-to-reproduce)
+12. [Cost control and cleanup](#13-cost-control-and-cleanup)
 
 ---
 
@@ -454,22 +453,7 @@ All procedures run inside `BEGIN TRY / BEGIN TRANSACTION / COMMIT`, with `ROLLBA
 
 ---
 
-## 9. Results
-
-### Screenshots
-
-| | |
-|---|---|
-| Successful pipeline run | ![Run](docs/05-adf-run-success.png) |
-| Failed run, file missing | ![Missing file](docs/06-adf-run-file-missing.png) |
-| Trigger run | ![Trigger](docs/07-adf-trigger-run.png) |
-| SCD2 on customers | ![SCD2 customers](docs/10-synapse-scd2-customers.png) |
-| SCD2 on products | ![SCD2 products](docs/11-synapse-scd2-products.png) |
-| Final counts | ![Counts](docs/12-synapse-counts.png) |
-
----
-
-## 10. Known limitations
+## 9. Known limitations
 
 - **Days must be loaded in chronological order.** Re-running an older day after a newer one has been loaded would create false dimension versions. Re-running the *latest* loaded day is safe.
 - **No validation inside Synapse.** An empty or doubly loaded staging table, or a sale without a matching dimension version (dropped silently by the inner join), is not detected there. Protection against a doubly loaded staging table relies on the `TRUNCATE` in the Copy activity.
@@ -478,7 +462,7 @@ All procedures run inside `BEGIN TRY / BEGIN TRANSACTION / COMMIT`, with `ROLLBA
 
 ---
 
-## 11. Possible improvements
+## 10. Possible improvements
 
 - Save rejected rows to a quarantine table with the rejection reason
 - Source dimensions from a master data feed
@@ -488,7 +472,7 @@ All procedures run inside `BEGIN TRY / BEGIN TRANSACTION / COMMIT`, with `ROLLBA
 
 ---
 
-## 12. How to reproduce
+## 11. How to reproduce
 
 1. **Generate the data.** Create `customers.csv` (40 rows) and `products.csv` (25 rows) in Mockaroo, put them next to `data/generator/generate_sales.py` and run it (`pip install pandas numpy`). It writes the two daily CSV files.
 2. **Create the Azure resources** from [Step 1](#step-1-azure-resources) and set the budget alert first.
@@ -511,7 +495,7 @@ UNION ALL SELECT 'fact_sales', COUNT(*), NULL FROM dwh.fact_sales;
 
 ---
 
-## 13. Cost control and cleanup
+## 12. Cost control and cleanup
 
 - The **dedicated SQL pool** is billed while it is running: pause it after every working session.
 - The Databricks cluster auto-terminates after inactivity.

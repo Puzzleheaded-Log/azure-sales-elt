@@ -1,0 +1,577 @@
+{
+    "name": "pipeline_daily_sales",
+    "properties": {
+        "activities": [
+            {
+                "name": "check_file",
+                "type": "GetMetadata",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "dataset": {
+                        "referenceName": "ds_landing_sales",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "file_name": {
+                                "value": "@concat('sales_', pipeline().parameters.process_date, '.csv')",
+                                "type": "Expression"
+                            }
+                        }
+                    },
+                    "fieldList": [
+                        "exists"
+                    ],
+                    "storeSettings": {
+                        "type": "AzureBlobFSReadSettings",
+                        "recursive": true,
+                        "enablePartitionDiscovery": false
+                    },
+                    "formatSettings": {
+                        "type": "DelimitedTextReadSettings"
+                    }
+                }
+            },
+            {
+                "name": "check_file_exists",
+                "type": "IfCondition",
+                "dependsOn": [
+                    {
+                        "activity": "check_file",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "expression": {
+                        "value": "@activity('check_file').output.exists",
+                        "type": "Expression"
+                    },
+                    "ifFalseActivities": [
+                        {
+                            "name": "fail_file_missing",
+                            "type": "Fail",
+                            "dependsOn": [],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "message": {
+                                    "value": "@concat('The file sales_', pipeline().parameters.process_date, '.csv does not exist in landing')",
+                                    "type": "Expression"
+                                },
+                                "errorCode": {
+                                    "value": "FileNotFound",
+                                    "type": "Expression"
+                                }
+                            }
+                        }
+                    ],
+                    "ifTrueActivities": [
+                        {
+                            "name": "copy_landing_to_bronze",
+                            "type": "Copy",
+                            "dependsOn": [],
+                            "policy": {
+                                "timeout": "0.12:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "source": {
+                                    "type": "DelimitedTextSource",
+                                    "storeSettings": {
+                                        "type": "AzureBlobFSReadSettings",
+                                        "recursive": true,
+                                        "enablePartitionDiscovery": false
+                                    },
+                                    "formatSettings": {
+                                        "type": "DelimitedTextReadSettings"
+                                    }
+                                },
+                                "sink": {
+                                    "type": "DelimitedTextSink",
+                                    "storeSettings": {
+                                        "type": "AzureBlobFSWriteSettings"
+                                    },
+                                    "formatSettings": {
+                                        "type": "DelimitedTextWriteSettings",
+                                        "quoteAllText": true,
+                                        "fileExtension": ".txt"
+                                    }
+                                },
+                                "enableStaging": false,
+                                "translator": {
+                                    "type": "TabularTranslator",
+                                    "typeConversion": true,
+                                    "typeConversionSettings": {
+                                        "allowDataTruncation": true,
+                                        "treatBooleanAsNumber": false
+                                    }
+                                }
+                            },
+                            "inputs": [
+                                {
+                                    "referenceName": "ds_landing_sales",
+                                    "type": "DatasetReference",
+                                    "parameters": {
+                                        "file_name": {
+                                            "value": "@concat('sales_', pipeline().parameters.process_date, '.csv')",
+                                            "type": "Expression"
+                                        }
+                                    }
+                                }
+                            ],
+                            "outputs": [
+                                {
+                                    "referenceName": "ds_bronze_sales",
+                                    "type": "DatasetReference",
+                                    "parameters": {
+                                        "folder_path": {
+                                            "value": "@concat('sales/', formatDateTime(pipeline().parameters.process_date, 'yyyy/MM/dd'))",
+                                            "type": "Expression"
+                                        },
+                                        "file_name": {
+                                            "value": "@concat('sales_', pipeline().parameters.process_date, '.csv')",
+                                            "type": "Expression"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            },
+            {
+                "name": "nb_bronze_to_silver",
+                "type": "DatabricksNotebook",
+                "dependsOn": [
+                    {
+                        "activity": "check_file_exists",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.01:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "notebookPath": "/Project1/01_bronze_to_silver",
+                    "baseParameters": {
+                        "process_date": {
+                            "value": "@pipeline().parameters.process_date",
+                            "type": "Expression"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "ls_databricks",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "nb_silver_to_gold",
+                "type": "DatabricksNotebook",
+                "dependsOn": [
+                    {
+                        "activity": "nb_bronze_to_silver",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.01:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "notebookPath": "/Project1/02_silver_to_gold",
+                    "baseParameters": {
+                        "process_date": {
+                            "value": "@pipeline().parameters.process_date",
+                            "type": "Expression"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "ls_databricks",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "copy_gold_to_staging",
+                "type": "Copy",
+                "dependsOn": [
+                    {
+                        "activity": "nb_silver_to_gold",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "ParquetSource",
+                        "storeSettings": {
+                            "type": "AzureBlobFSReadSettings",
+                            "recursive": true,
+                            "wildcardFolderPath": {
+                                "value": "@concat('export/sales/', formatDateTime(pipeline().parameters.process_date, 'yyyy/MM/dd'))",
+                                "type": "Expression"
+                            },
+                            "wildcardFileName": "*.parquet",
+                            "enablePartitionDiscovery": false
+                        },
+                        "formatSettings": {
+                            "type": "ParquetReadSettings"
+                        }
+                    },
+                    "sink": {
+                        "type": "SqlDWSink",
+                        "preCopyScript": "TRUNCATE TABLE staging.sales",
+                        "allowCopyCommand": true,
+                        "disableMetricsCollection": false
+                    },
+                    "enableStaging": false,
+                    "translator": {
+                        "type": "TabularTranslator",
+                        "mappings": [
+                            {
+                                "source": {
+                                    "name": "order_id",
+                                    "type": "Int32"
+                                },
+                                "sink": {
+                                    "name": "order_id",
+                                    "type": "Int32"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "order_date",
+                                    "type": "DateTime"
+                                },
+                                "sink": {
+                                    "name": "order_date",
+                                    "type": "Date"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "year",
+                                    "type": "Int32"
+                                },
+                                "sink": {
+                                    "name": "year",
+                                    "type": "Int32"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "month",
+                                    "type": "Int32"
+                                },
+                                "sink": {
+                                    "name": "month",
+                                    "type": "Int32"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "day",
+                                    "type": "Int32"
+                                },
+                                "sink": {
+                                    "name": "day",
+                                    "type": "Int32"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "customer_id",
+                                    "type": "Int32"
+                                },
+                                "sink": {
+                                    "name": "customer_id",
+                                    "type": "Int32"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "customer_name",
+                                    "type": "String"
+                                },
+                                "sink": {
+                                    "name": "customer_name",
+                                    "type": "String"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "customer_email",
+                                    "type": "String"
+                                },
+                                "sink": {
+                                    "name": "customer_email",
+                                    "type": "String"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "city",
+                                    "type": "String"
+                                },
+                                "sink": {
+                                    "name": "city",
+                                    "type": "String"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "country",
+                                    "type": "String"
+                                },
+                                "sink": {
+                                    "name": "country",
+                                    "type": "String"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "product_id",
+                                    "type": "Int32"
+                                },
+                                "sink": {
+                                    "name": "product_id",
+                                    "type": "Int32"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "product_name",
+                                    "type": "String"
+                                },
+                                "sink": {
+                                    "name": "product_name",
+                                    "type": "String"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "category",
+                                    "type": "String"
+                                },
+                                "sink": {
+                                    "name": "category",
+                                    "type": "String"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "unit_price",
+                                    "type": "Decimal"
+                                },
+                                "sink": {
+                                    "name": "unit_price",
+                                    "type": "Decimal"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "quantity",
+                                    "type": "Int32"
+                                },
+                                "sink": {
+                                    "name": "quantity",
+                                    "type": "Int32"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "discount",
+                                    "type": "Decimal"
+                                },
+                                "sink": {
+                                    "name": "discount",
+                                    "type": "Decimal"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "total_amount",
+                                    "type": "Decimal"
+                                },
+                                "sink": {
+                                    "name": "total_amount",
+                                    "type": "Decimal"
+                                }
+                            }
+                        ]
+                    }
+                },
+                "inputs": [
+                    {
+                        "referenceName": "ds_gold_export",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "folder_path": {
+                                "value": "@concat('export/sales/', formatDateTime(pipeline().parameters.process_date, 'yyyy/MM/dd'))",
+                                "type": "Expression"
+                            }
+                        }
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "ds_synapse_staging_sales",
+                        "type": "DatasetReference"
+                    }
+                ]
+            },
+            {
+                "name": "sp_load_dim_customer",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "copy_gold_to_staging",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.00:30:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dwh].[usp_load_dim_customer]",
+                    "storedProcedureParameters": {
+                        "process_date": {
+                            "value": {
+                                "value": "@pipeline().parameters.process_date",
+                                "type": "Expression"
+                            },
+                            "type": "DateTime"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "ls_synapse",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "sp_load_dim_product",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "sp_load_dim_customer",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.00:30:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dwh].[usp_load_dim_product]",
+                    "storedProcedureParameters": {
+                        "process_date": {
+                            "value": {
+                                "value": "@pipeline().parameters.process_date",
+                                "type": "Expression"
+                            },
+                            "type": "DateTime"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "ls_synapse",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "sp_load_fact_sales",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "sp_load_dim_product",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.00:30:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "storedProcedureName": "[dwh].[usp_load_fact_sales]",
+                    "storedProcedureParameters": {
+                        "process_date": {
+                            "value": {
+                                "value": "@pipeline().parameters.process_date",
+                                "type": "Expression"
+                            },
+                            "type": "DateTime"
+                        }
+                    }
+                },
+                "linkedServiceName": {
+                    "referenceName": "ls_synapse",
+                    "type": "LinkedServiceReference"
+                }
+            }
+        ],
+        "parameters": {
+            "process_date": {
+                "type": "string",
+                "defaultValue": "2026-11-01"
+            }
+        },
+        "annotations": [],
+        "lastPublishTime": "2026-11-18T07:22:10Z"
+    },
+    "type": "Microsoft.DataFactory/factories/pipelines"
+}

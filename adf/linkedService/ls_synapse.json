@@ -1,0 +1,15 @@
+{
+    "name": "ls_synapse",
+    "type": "Microsoft.DataFactory/factories/linkedservices",
+    "properties": {
+        "annotations": [],
+        "type": "AzureSqlDW",
+        "typeProperties": {
+            "server": "syn-sales-elt.sql.azuresynapse.net",
+            "database": "dwh_sales",
+            "encrypt": "mandatory",
+            "trustServerCertificate": false,
+            "authenticationType": "SystemAssignedManagedIdentity"
+        }
+    }
+}

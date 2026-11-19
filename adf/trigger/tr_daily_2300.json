@@ -1,0 +1,35 @@
+{
+    "name": "tr_daily_2300",
+    "properties": {
+        "annotations": [],
+        "runtimeState": "Stopped",
+        "pipelines": [
+            {
+                "pipelineReference": {
+                    "referenceName": "pipeline_daily_sales",
+                    "type": "PipelineReference"
+                },
+                "parameters": {
+                    "process_date": "@formatDateTime(convertFromUtc(trigger().scheduledTime, 'GTB Standard Time'), 'yyyy-MM-dd')"
+                }
+            }
+        ],
+        "type": "ScheduleTrigger",
+        "typeProperties": {
+            "recurrence": {
+                "frequency": "Day",
+                "interval": 1,
+                "startTime": "2026-11-19T07:32:00",
+                "timeZone": "GTB Standard Time",
+                "schedule": {
+                    "minutes": [
+                        0
+                    ],
+                    "hours": [
+                        23
+                    ]
+                }
+            }
+        }
+    }
+}

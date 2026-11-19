@@ -1,0 +1,99 @@
+{
+    "name": "ds_synapse_staging_sales",
+    "properties": {
+        "linkedServiceName": {
+            "referenceName": "ls_synapse",
+            "type": "LinkedServiceReference"
+        },
+        "annotations": [],
+        "type": "AzureSqlDWTable",
+        "schema": [
+            {
+                "name": "order_id",
+                "type": "int",
+                "precision": 10
+            },
+            {
+                "name": "order_date",
+                "type": "date"
+            },
+            {
+                "name": "year",
+                "type": "int",
+                "precision": 10
+            },
+            {
+                "name": "month",
+                "type": "int",
+                "precision": 10
+            },
+            {
+                "name": "day",
+                "type": "int",
+                "precision": 10
+            },
+            {
+                "name": "customer_id",
+                "type": "int",
+                "precision": 10
+            },
+            {
+                "name": "customer_name",
+                "type": "nvarchar"
+            },
+            {
+                "name": "customer_email",
+                "type": "nvarchar"
+            },
+            {
+                "name": "city",
+                "type": "nvarchar"
+            },
+            {
+                "name": "country",
+                "type": "nvarchar"
+            },
+            {
+                "name": "product_id",
+                "type": "int",
+                "precision": 10
+            },
+            {
+                "name": "product_name",
+                "type": "nvarchar"
+            },
+            {
+                "name": "category",
+                "type": "nvarchar"
+            },
+            {
+                "name": "unit_price",
+                "type": "decimal",
+                "precision": 10,
+                "scale": 2
+            },
+            {
+                "name": "quantity",
+                "type": "int",
+                "precision": 10
+            },
+            {
+                "name": "discount",
+                "type": "decimal",
+                "precision": 4,
+                "scale": 2
+            },
+            {
+                "name": "total_amount",
+                "type": "decimal",
+                "precision": 12,
+                "scale": 2
+            }
+        ],
+        "typeProperties": {
+            "schema": "staging",
+            "table": "sales"
+        }
+    },
+    "type": "Microsoft.DataFactory/factories/datasets"
+}

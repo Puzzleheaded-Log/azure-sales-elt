@@ -1,0 +1,21 @@
+# Python / PyCharm
+.venv/
+venv/
+__pycache__/
+*.pyc
+.idea/
+.vscode/
+
+# Secrete si fisiere locale
+.env
+*.pem
+*.key
+secrets*
+
+# Fisiere temporare
+*.log
+*.tmp
+
+# Sistem
+.DS_Store
+Thumbs.db
